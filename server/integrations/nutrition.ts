@@ -38,7 +38,7 @@ function buildNutritionMcp(): McpSdkServerConfigWithInstance {
     tools: [
       tool(
         "log_meal",
-        `Insert a meal row into Supabase. Use after estimating macros. Vibhas is on America/New_York; convert before passing date/time. Units: cal (not kcal). Six nutrients only: calories, protein, sat_fat, added_sugar, sodium, fiber.`,
+        `Insert a meal row into Supabase. Use after estimating macros. Vibhas is on America/New_York; convert before passing date/time. If the user did not specify when they ate it, default to the current NY date/time from the system prompt — NOT noon, NOT a guess. Units: cal (not kcal). Six nutrients only: calories, protein, sat_fat, added_sugar, sodium, fiber.`,
         {
           name: z.string().describe("Title Case meal name, e.g. 'Tofu Rice Bowl'."),
           date: z.string().describe("YYYY-MM-DD in America/New_York."),
@@ -119,7 +119,7 @@ function buildNutritionMcp(): McpSdkServerConfigWithInstance {
 
       tool(
         "upload_meal_photo",
-        `Fetch an image from a URL (typically a Sendblue MMS media_url), optimize to WebP ≤720px long-side q55, upload to the meal-photos bucket at YYYY/MM/DD/HHMM-slug.webp, and return the storage path. Use this whenever the user attaches a photo to a meal.`,
+        `Fetch an image from a URL (Sendblue MMS media_url, or a public image URL you found via WebSearch/WebFetch), optimize to WebP ≤720px long-side q55, upload to the meal-photos bucket at YYYY/MM/DD/HHMM-slug.webp, and return the storage path. MUST be called whenever the user asks for a photo to be attached to a meal — claiming a photo was attached without invoking this tool (and then passing its returned path into log_meal's photo_paths) is a hallucination. The image_url MUST be a real, fetched URL — never invent one.`,
         {
           image_url: z.string().describe("Publicly fetchable URL (Sendblue media_url or similar)."),
           date: z.string().describe("YYYY-MM-DD — used to build the path."),

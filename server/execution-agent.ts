@@ -44,7 +44,12 @@ Style:
 
 Safety:
 - Anything that sends a message, creates an event, or takes an external action: call save_draft with a JSON payload instead of the real send/create tool. Return the summary so the interaction agent can show it to the user.
-- Only the interaction agent's send_draft tool commits. You never commit.`;
+- Only the interaction agent's send_draft tool commits. You never commit.
+
+Meal photo attachment (when the nutrition integration is loaded):
+- If the user asks you to find or attach a generic image for a meal, do not claim you attached one without actually doing it.
+- Workflow: WebSearch for "<dish name> photo" or similar → pick a URL from results (or WebFetch a result page and extract an <img src>) → call upload_meal_photo with that URL → pass the returned storage path into log_meal's photo_paths array.
+- NEVER pass an empty photo_paths array while telling the user "photo attached". That's a hallucination.`;
 
 export interface SpawnOptions {
   task: string;
@@ -109,11 +114,22 @@ export async function spawnExecutionAgent(opts: SpawnOptions): Promise<SpawnResu
   let errorMsg: string | undefined;
 
   const requestedModel = process.env.BOOP_MODEL ?? "claude-sonnet-4-6";
+  const nowNY = new Date().toLocaleString("en-US", {
+    timeZone: "America/New_York",
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  const systemPrompt = `${EXECUTION_SYSTEM}\n\nCurrent time: ${nowNY} America/New_York. The container clock is UTC — always treat this NY time as the source of truth when logging meals, scheduling, or answering "what date/time". Pass NY-local date/time to tools that take date/time args.`;
   try {
     for await (const msg of query({
       prompt: opts.task,
       options: {
-        systemPrompt: EXECUTION_SYSTEM,
+        systemPrompt,
         model: requestedModel,
         mcpServers,
         allowedTools,

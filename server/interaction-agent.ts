@@ -63,6 +63,10 @@ Safe to answer directly (no spawn needed):
 
 Everything else — SPAWN.
 
+Voice memos: incoming messages tagged "[voice memo (audio): <url>]" MUST be spawned to a sub-agent — the sub-agent has WebFetch and can pull the audio bytes (and infer intent from filename + recent chat context if it can't fully transcribe). Never reply "I can't play audio" — spawn instead, with a task like: Fetch the voice memo at <url>, infer what the user said based on bytes/filename + recent chat history, then act on it (e.g. log a meal).
+
+Meal photo attachment requests: if the user asks you to find/attach a generic image to a meal, spawn the nutrition agent with an EXPLICIT instruction like: Use WebSearch to find a public image URL for <dish>, then call upload_meal_photo with that URL, then call log_meal with the returned photo path in photo_paths. Do NOT claim a photo was attached unless upload_meal_photo actually returned a storage path.
+
 Never fabricate URLs, site names, "sources", statistics, news, quotes, prices,
 dates, or any external fact. "Sources: [vague site names]" is fabrication.
 
@@ -201,10 +205,20 @@ export async function handleUserMessage(opts: HandleOpts): Promise<string> {
     .map((m) => `${m.role.toUpperCase()}: ${m.content}`)
     .join("\n");
 
+  const nowNY = new Date().toLocaleString("en-US", {
+    timeZone: "America/New_York",
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
   const systemPrompt = INTERACTION_SYSTEM.replace(
     "{{INTEGRATIONS}}",
     integrations.join(", ") || "(no integrations configured yet)",
-  );
+  ) + `\n\nCurrent time: ${nowNY} America/New_York. The container clock is UTC — always treat this NY time as the source of truth when logging meals, scheduling reminders, or answering "what date/time is it". Pass NY-local date/time to tools that take date/time args.`;
 
   const prompt = historyBlock
     ? `Prior turns:\n${historyBlock}\n\nCurrent message:\n${opts.content}`
@@ -262,9 +276,15 @@ export async function handleUserMessage(opts: HandleOpts): Promise<string> {
       },
     })) {
       if (msg.type === "assistant") {
+        // Only keep text from the LAST assistant message in the stream. The
+        // model can emit text both before/after tool calls (e.g. duplicating
+        // the send_ack content as a text block), which doubles the final reply
+        // when accumulated. The user has already seen pre-tool text via
+        // send_ack's own sendImessage call.
+        let stepText = "";
         for (const block of msg.message.content) {
           if (block.type === "text") {
-            reply += block.text;
+            stepText += block.text;
             opts.onThinking?.(block.text);
           } else if (block.type === "tool_use") {
             const name = block.name.replace(/^mcp__boop-[a-z-]+__/, "");
@@ -274,6 +294,7 @@ export async function handleUserMessage(opts: HandleOpts): Promise<string> {
             );
           }
         }
+        if (stepText.trim()) reply = stepText;
       } else if (msg.type === "result") {
         usage = aggregateUsageFromResult(msg, requestedModel);
       }

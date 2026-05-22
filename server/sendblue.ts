@@ -134,9 +134,14 @@ export function createSendblueRouter(): express.Router {
       res.json({ ok: true, skipped: true });
       return;
     }
+    const isAudioUrl = (u: string) => /\.(caf|m4a|mp3|wav|opus|aac|amr)(\?|$)/i.test(u);
     const content = [
       hasContent ? rawContent : "",
-      ...mediaUrls.map((u) => `[attached image: ${u}]`),
+      ...mediaUrls.map((u) =>
+        isAudioUrl(u)
+          ? `[voice memo (audio): ${u}] — fetch this URL with WebFetch to inspect bytes/filename; if you can't transcribe, infer from filename + surrounding chat context what the user likely said.`
+          : `[attached image: ${u}]`,
+      ),
     ]
       .filter(Boolean)
       .join("\n\n");
