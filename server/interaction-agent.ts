@@ -120,6 +120,7 @@ export async function handleUserMessage(opts: HandleOpts): Promise<string> {
   const automationServer = createAutomationMcp(opts.conversationId);
   const draftDecisionServer = createDraftDecisionMcp(opts.conversationId);
 
+  const ackTextsSent: string[] = [];
   const ackServer = createSdkMcpServer({
     name: "boop-ack",
     version: "0.1.0",
@@ -137,6 +138,7 @@ export async function handleUserMessage(opts: HandleOpts): Promise<string> {
               content: [{ type: "text" as const, text: "Empty ack skipped." }],
             };
           }
+          ackTextsSent.push(text);
           if (opts.conversationId.startsWith("sms:")) {
             const number = opts.conversationId.slice(4);
             await sendImessage(number, text);
@@ -304,7 +306,26 @@ export async function handleUserMessage(opts: HandleOpts): Promise<string> {
     reply = "Sorry — I hit an error processing that. Try again in a moment.";
   }
 
-  reply = reply.trim() || "(no reply)";
+  reply = reply.trim();
+  // Strip any ack text the model already sent via send_ack — otherwise we
+  // double-send. The model often emits the same string both as send_ack's
+  // `message` arg and as a text block; the ack was already delivered, so
+  // the final reply should not echo it.
+  for (const ack of ackTextsSent) {
+    if (reply === ack) {
+      reply = "";
+      break;
+    }
+    // Also strip if the reply STARTS with the ack (model narrated the ack
+    // then continued with the real answer).
+    if (reply.startsWith(ack)) {
+      reply = reply.slice(ack.length).trim();
+    }
+  }
+  // Only fall back to "(no reply)" placeholder when the model truly emitted
+  // nothing AND no ack was sent. If an ack covered the turn, reply stays
+  // empty so the caller skips the send (see sendblue.ts:171).
+  if (!reply && ackTextsSent.length === 0) reply = "(no reply)";
 
   if (usage.costUsd > 0 || usage.inputTokens > 0) {
     log(
