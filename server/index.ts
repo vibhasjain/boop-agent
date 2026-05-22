@@ -13,6 +13,8 @@ import { startHeartbeatLoop } from "./heartbeat.js";
 import { startConsolidationLoop } from "./consolidation.js";
 import { cancelAgent, retryAgent } from "./execution-agent.js";
 import { createComposioRouter } from "./composio-routes.js";
+import { convex } from "./convex-client.js";
+import { api } from "../convex/_generated/api.js";
 
 async function main() {
   await loadIntegrations();
@@ -137,6 +139,43 @@ async function main() {
       return;
     }
     res.json(result);
+  });
+
+  // Conversation transcript for cloud Claude Code sessions debugging
+  // a meal-logging interaction. Same X-Nutrition-Token auth as /log-meal.
+  // Defaults to the iMessage thread for Vibhas's phone if conversationId
+  // is omitted; pass `?conversationId=sms:+1...` to target a specific chat.
+  app.get("/conversation-log", async (req, res) => {
+    const expected = process.env.NUTRITION_LOG_MEAL_TOKEN;
+    if (!expected) {
+      res.status(500).json({ error: "server not configured" });
+      return;
+    }
+    if (req.header("X-Nutrition-Token") !== expected) {
+      res.status(401).json({ error: "unauthorized" });
+      return;
+    }
+    const conversationId =
+      typeof req.query.conversationId === "string" && req.query.conversationId
+        ? req.query.conversationId
+        : "sms:" + (process.env.NUTRITION_DEFAULT_PHONE ?? "");
+    const limit = Math.min(parseInt((req.query.limit as string) ?? "20", 10) || 20, 100);
+    try {
+      const rows = await convex.query(api.messages.recent, { conversationId, limit });
+      res.json({
+        ok: true,
+        conversationId,
+        count: rows.length,
+        messages: rows.map((m) => ({
+          role: m.role,
+          content: m.content,
+          createdAt: m.createdAt ?? null,
+        })),
+      });
+    } catch (err) {
+      console.error("[conversation-log] err", err);
+      res.status(500).json({ error: String(err) });
+    }
   });
 
   // Chat endpoint for local testing and the debug dashboard

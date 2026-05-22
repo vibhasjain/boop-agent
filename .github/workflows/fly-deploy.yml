@@ -1,0 +1,18 @@
+name: Fly Deploy
+
+on:
+  push:
+    branches:
+      - nutrition-fork
+
+jobs:
+  deploy:
+    name: Deploy nutrition-boop
+    runs-on: ubuntu-latest
+    concurrency: deploy-group
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - run: flyctl deploy --remote-only --app nutrition-boop
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
