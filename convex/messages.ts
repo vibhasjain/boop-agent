@@ -55,3 +55,31 @@ export const recent = query({
     return msgs.reverse();
   },
 });
+
+// Delete every message in a conversation older than `before` (a Unix
+// epoch ms timestamp). Used to clear pre-cutover history so we don't
+// keep replaying old, broken turns. Decrements the conversation's
+// messageCount by the number actually deleted.
+export const deleteBefore = mutation({
+  args: { conversationId: v.string(), before: v.number() },
+  handler: async (ctx, args) => {
+    const toDelete = await ctx.db
+      .query("messages")
+      .withIndex("by_conversation", (q) => q.eq("conversationId", args.conversationId))
+      .filter((q) => q.lt(q.field("createdAt"), args.before))
+      .collect();
+    for (const m of toDelete) {
+      await ctx.db.delete(m._id);
+    }
+    const conv = await ctx.db
+      .query("conversations")
+      .withIndex("by_conversation", (q) => q.eq("conversationId", args.conversationId))
+      .unique();
+    if (conv) {
+      await ctx.db.patch(conv._id, {
+        messageCount: Math.max(0, conv.messageCount - toDelete.length),
+      });
+    }
+    return { deleted: toDelete.length };
+  },
+});
