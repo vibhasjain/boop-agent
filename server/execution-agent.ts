@@ -120,7 +120,7 @@ export async function spawnExecutionAgent(opts: SpawnOptions): Promise<SpawnResu
         // Load .claude/skills/ so the model can invoke SKILL.md playbooks. Without
         // this the SDK runs in isolation mode and skills are silently ignored.
         settingSources: ["project"],
-        permissionMode: "bypassPermissions",
+        permissionMode: "acceptEdits",
         abortController: abort,
       },
     })) {

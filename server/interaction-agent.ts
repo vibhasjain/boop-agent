@@ -258,7 +258,7 @@ export async function handleUserMessage(opts: HandleOpts): Promise<string> {
           "Agent",
           "Skill",
         ],
-        permissionMode: "bypassPermissions",
+        permissionMode: "acceptEdits",
       },
     })) {
       if (msg.type === "assistant") {
