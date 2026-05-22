@@ -123,11 +123,23 @@ export function createSendblueRouter(): express.Router {
   const router = express.Router();
 
   router.post("/webhook", async (req, res) => {
-    const { content, from_number, is_outbound, message_handle } = req.body ?? {};
-    if (is_outbound || !content || !from_number) {
+    const { content: rawContent, from_number, is_outbound, message_handle, media_url } = req.body ?? {};
+    const mediaUrls: string[] = Array.isArray(media_url)
+      ? media_url.filter((u: unknown): u is string => typeof u === "string" && u.length > 0)
+      : typeof media_url === "string" && media_url.length > 0
+        ? [media_url]
+        : [];
+    const hasContent = typeof rawContent === "string" && rawContent.length > 0;
+    if (is_outbound || !from_number || (!hasContent && mediaUrls.length === 0)) {
       res.json({ ok: true, skipped: true });
       return;
     }
+    const content = [
+      hasContent ? rawContent : "",
+      ...mediaUrls.map((u) => `[attached image: ${u}]`),
+    ]
+      .filter(Boolean)
+      .join("\n\n");
 
     if (message_handle) {
       const { claimed } = await convex.mutation(api.sendblueDedup.claim, {

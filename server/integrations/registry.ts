@@ -28,6 +28,8 @@ export function getIntegration(name: string): IntegrationModule | undefined {
 export async function loadIntegrations(): Promise<void> {
   const { registerComposioToolkits } = await import("./composio-loader.js");
   await registerComposioToolkits();
+  const { registerNutrition } = await import("./nutrition.js");
+  registerNutrition();
   const loaded = [...registry.keys()];
   console.log(
     `[integrations] loaded: ${loaded.join(", ") || "(none — connect a toolkit from the Debug UI's Connections tab)"}`,
