@@ -3,6 +3,7 @@ import { api } from "../convex/_generated/api.js";
 import { convex } from "./convex-client.js";
 import { handleUserMessage } from "./interaction-agent.js";
 import { broadcast } from "./broadcast.js";
+import { transcribeAudioUrl } from "./whisper.js";
 
 const API_BASE = "https://api.sendblue.com/api";
 const MAX_CHUNK = 2900;
@@ -135,16 +136,6 @@ export function createSendblueRouter(): express.Router {
       return;
     }
     const isAudioUrl = (u: string) => /\.(caf|m4a|mp3|wav|opus|aac|amr)(\?|$)/i.test(u);
-    const content = [
-      hasContent ? rawContent : "",
-      ...mediaUrls.map((u) =>
-        isAudioUrl(u)
-          ? `[voice memo (audio): ${u}] — fetch this URL with WebFetch to inspect bytes/filename; if you can't transcribe, infer from filename + surrounding chat context what the user likely said.`
-          : `[attached image: ${u}]`,
-      ),
-    ]
-      .filter(Boolean)
-      .join("\n\n");
 
     if (message_handle) {
       const { claimed } = await convex.mutation(api.sendblueDedup.claim, {
@@ -158,15 +149,38 @@ export function createSendblueRouter(): express.Router {
 
     const conversationId = `sms:${from_number}`;
     const turnTag = Math.random().toString(36).slice(2, 8);
-    const preview = content.length > 100 ? content.slice(0, 100) + "…" : content;
-    console.log(`[turn ${turnTag}] ← ${from_number}: ${JSON.stringify(preview)}`);
     const start = Date.now();
 
-    broadcast("message_in", { conversationId, content, from_number, handle: message_handle });
+    // Respond to Sendblue immediately — transcription + agent run happen
+    // below, on our own time, so Sendblue's webhook timeout never fires.
     res.json({ ok: true });
 
     const stopTyping = startTypingLoop(from_number);
     try {
+      // Transcribe audio media URLs via local whisper.cpp. Each takes a few
+      // seconds on shared-cpu-1x; falls back to a URL tag on failure so we
+      // never regress to the pre-whisper "I can't play audio" path.
+      const mediaTagged = await Promise.all(
+        mediaUrls.map(async (u) => {
+          if (!isAudioUrl(u)) return `[attached image: ${u}]`;
+          try {
+            const transcript = await transcribeAudioUrl(u);
+            console.log(`[whisper turn=${turnTag}] ${u.slice(-40)} -> ${transcript.length} chars`);
+            return `[voice memo transcript: "${transcript.replace(/"/g, '\\"')}"]`;
+          } catch (err) {
+            console.warn(`[whisper turn=${turnTag}] transcribe failed for ${u}:`, (err as Error).message);
+            return `[voice memo (audio): ${u}] — transcription unavailable; fetch this URL with WebFetch to inspect bytes/filename, or infer from surrounding chat context.`;
+          }
+        }),
+      );
+      const content = [hasContent ? rawContent : "", ...mediaTagged]
+        .filter(Boolean)
+        .join("\n\n");
+
+      const preview = content.length > 100 ? content.slice(0, 100) + "…" : content;
+      console.log(`[turn ${turnTag}] ← ${from_number}: ${JSON.stringify(preview)}`);
+      broadcast("message_in", { conversationId, content, from_number, handle: message_handle });
+
       const reply = await handleUserMessage({
         conversationId,
         content,
