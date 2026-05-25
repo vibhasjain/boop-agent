@@ -15,7 +15,15 @@ RUN git clone --depth 1 --branch v1.7.4 https://github.com/ggerganov/whisper.cpp
 WORKDIR /build/whisper.cpp
 # CPU-only build. Produces ./build/bin/whisper-cli (renamed from main in
 # recent versions). No GPU flags — Fly shared-cpu-1x has no GPU anyway.
-RUN cmake -B build -DGGML_NATIVE=OFF -DGGML_CUDA=OFF && \
+# BUILD_SHARED_LIBS=OFF produces a fully static binary so we don't need
+# to copy libwhisper.so + libggml*.so into the runtime image.
+RUN cmake -B build \
+      -DGGML_NATIVE=OFF \
+      -DGGML_CUDA=OFF \
+      -DBUILD_SHARED_LIBS=OFF \
+      -DWHISPER_BUILD_TESTS=OFF \
+      -DWHISPER_BUILD_EXAMPLES=ON \
+      -DCMAKE_BUILD_TYPE=Release && \
     cmake --build build --config Release -j --target whisper-cli
 # Download the tiny.en model (~75MB). English-only, fast, fine for short
 # voice memos by a single speaker.
