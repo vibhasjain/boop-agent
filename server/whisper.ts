@@ -7,7 +7,7 @@ import { join } from "node:path";
 const execFileP = promisify(execFile);
 
 const WHISPER_BIN = process.env.WHISPER_BIN ?? "/opt/whisper/whisper-cli";
-const WHISPER_MODEL = process.env.WHISPER_MODEL ?? "/opt/whisper/ggml-tiny.en.bin";
+const WHISPER_MODEL = process.env.WHISPER_MODEL ?? "/opt/whisper/ggml-base.en.bin";
 
 // Hard cap to keep cold-start memory predictable. A 60s memo at 16kHz mono
 // PCM is ~1.9MB; we allow ~10x that for safety on outliers.

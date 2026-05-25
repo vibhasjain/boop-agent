@@ -27,7 +27,7 @@ RUN cmake -B build \
     cmake --build build --config Release -j --target whisper-cli
 # Download the tiny.en model (~75MB). English-only, fast, fine for short
 # voice memos by a single speaker.
-RUN ./models/download-ggml-model.sh tiny.en
+RUN ./models/download-ggml-model.sh base.en
 
 FROM base AS deps
 COPY package.json package-lock.json ./
@@ -43,7 +43,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Pull in the whisper.cpp binary + tiny.en model. Server code shells out
 # to /opt/whisper/whisper-cli, see server/whisper.ts.
 COPY --from=whisper-builder /build/whisper.cpp/build/bin/whisper-cli /opt/whisper/whisper-cli
-COPY --from=whisper-builder /build/whisper.cpp/models/ggml-tiny.en.bin /opt/whisper/ggml-tiny.en.bin
+COPY --from=whisper-builder /build/whisper.cpp/models/ggml-base.en.bin /opt/whisper/ggml-base.en.bin
 COPY --from=deps /app/node_modules ./node_modules
 COPY package.json package-lock.json tsconfig.json ./
 COPY server ./server
