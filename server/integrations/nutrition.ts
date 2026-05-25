@@ -57,7 +57,9 @@ function buildNutritionMcp(): McpSdkServerConfigWithInstance {
             .array(z.string())
             .optional()
             .default([])
-            .describe("Storage paths in meal-photos bucket, hero first. e.g. ['2026/05/22/2121-bowl.webp']."),
+            .describe(
+              "Storage paths, hero first. TWO formats: (1) per-meal photos in meal-photos bucket as 'YYYY/MM/DD/HHMM-slug.webp', e.g. '2026/05/22/2121-bowl.webp'. (2) Favorite-product photos as 'favorites/<slug>.webp' — these resolve to the favorite-photos bucket on the frontend. Iron rule: if the meal references a favorite (via from_favorite OR by name match in list_favorites results) and that favorite has a photo_path, you MUST include 'favorites/<that-slug>.webp' in this array. Composed meals get one favorites/ entry per composing favorite. Never paste a favorite's raw photo_path without the 'favorites/' prefix — the frontend will 404.",
+            ),
           notes: z.string().optional().describe("Only set if context worth preserving; usually null."),
         },
         async (args) => {
@@ -107,7 +109,7 @@ function buildNutritionMcp(): McpSdkServerConfigWithInstance {
 
       tool(
         "list_favorites",
-        "List all favorites (the product database). Check this first whenever a meal references a known item — reuse its photo_path and per-serving macros.",
+        "List all favorites (the product database). Check this first whenever a meal references a known item — reuse its per-serving macros and, if photo_path is set, include 'favorites/<slug>.webp' in the meal's photo_paths (the 'favorites/' prefix is REQUIRED — the raw photo_path here is just '<slug>.webp' but the frontend expects the prefixed form).",
         {},
         async () => {
           const resp = await sbFetch(`/rest/v1/favorites?select=slug,name,photo_path,serving,macros&order=slug.asc`);
